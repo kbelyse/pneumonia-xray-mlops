@@ -19,5 +19,5 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 git clone https://github.com/kbelyse/pneumonia-xray-mlops.git /opt/app
 cd /opt/app
 DOCKER_BUILDKIT=0 docker build -t pneumonia-xray-api .
-HTTP_PORT=80 docker compose up -d --no-build --scale api=2
+docker compose -f docker-compose.yml -f deploy/docker-compose.aws.yml up -d --no-build --scale api=2
 echo SETUP_DONE

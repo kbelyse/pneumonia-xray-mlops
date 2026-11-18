@@ -7,8 +7,8 @@ This builds on my machine learning summative, where I predicted sepsis in ICU pa
 ## Links
 
 * Video demo: VIDEO_LINK
-* Live app (AWS): http://13.63.225.111
-* API docs (Swagger): http://13.63.225.111/docs
+* Live app (AWS): https://13-63-225-111.sslip.io
+* API docs (Swagger): https://13-63-225-111.sslip.io/docs
 
 ## Dataset
 
@@ -70,7 +70,7 @@ My first runs had a lot of 502 errors. The containers were being killed because 
 
 ## Deployment (AWS)
 
-The app runs on an AWS EC2 server in eu-north-1 (Stockholm), type m7i-flex.large (2 CPUs, 8 GB), with a fixed Elastic IP. When the server first starts, `deploy/aws_user_data.sh` installs Docker, clones this repo, builds the image and starts 2 api containers behind nginx on port 80. Uploaded images, the SQLite database and retrained models live in Docker volumes on the server disk, so they survive restarts.
+The app runs on an AWS EC2 server in eu-north-1 (Stockholm), type m7i-flex.large (2 CPUs, 8 GB), with a fixed Elastic IP (13.63.225.111). When the server first starts, `deploy/aws_user_data.sh` installs Docker, clones this repo, builds the image and starts 2 api containers behind nginx. In front of nginx, Caddy serves the app over HTTPS with a free Let's Encrypt certificate (`deploy/Caddyfile`, `deploy/docker-compose.aws.yml`). I added it after my own browser refused the plain http link. sslip.io gives the IP a hostname, which the certificate needs. Uploaded images, the SQLite database and retrained models live in Docker volumes on the server disk, so they survive restarts.
 
 To update the server after pushing changes:
 
@@ -78,7 +78,7 @@ To update the server after pushing changes:
 ssh -i pneumonia-xray-key.pem ec2-user@13.63.225.111
 cd /opt/app && sudo git pull
 sudo DOCKER_BUILDKIT=0 docker build -t pneumonia-xray-api .
-sudo HTTP_PORT=80 docker compose up -d --no-build --scale api=2
+sudo docker compose -f docker-compose.yml -f deploy/docker-compose.aws.yml up -d --no-build --scale api=2
 ```
 
 ## Project structure
@@ -111,7 +111,7 @@ pneumonia-xray-mlops/
 ├── models/
 │   ├── pneumonia_mobilenetv2.h5
 │   └── metadata.json
-├── deploy/aws_user_data.sh startup script for the EC2 server
+├── deploy/                 EC2 startup script, Caddy (HTTPS) config
 ├── locust/                 locustfile, benchmark script and results
 ├── figures/                plots from the notebook
 ├── results/experiments.csv
