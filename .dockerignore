@@ -1,0 +1,11 @@
+.venv
+.git
+data/raw
+data/new_batch
+storage
+notebook
+logs
+locust
+figures
+results
+**/__pycache__
