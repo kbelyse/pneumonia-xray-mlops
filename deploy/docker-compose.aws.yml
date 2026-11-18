@@ -1,0 +1,20 @@
+# Extra settings for the AWS server, used on top of docker-compose.yml:
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.aws.yml up -d --no-build --scale api=2
+services:
+  nginx:
+    ports: !reset []        # nginx is only reached through caddy now
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

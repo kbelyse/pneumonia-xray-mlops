@@ -1,0 +1,10 @@
+# HTTPS for the AWS server. Caddy gets a free Let's Encrypt certificate by itself.
+# sslip.io turns the server IP into a hostname, which a certificate needs.
+13-63-225-111.sslip.io {
+	reverse_proxy nginx:80
+}
+
+# someone typing the bare IP gets sent to the https address
+http://13.63.225.111 {
+	redir https://13-63-225-111.sslip.io{uri}
+}
