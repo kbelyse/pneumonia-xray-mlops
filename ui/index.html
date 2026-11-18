@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pneumonia X-ray Classifier</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Pneumonia X-ray Classifier</h1>
+    <span class="sub">MobileNetV2 trained on pediatric chest X-rays</span>
+  </div>
+  <div id="status-pill" class="pill">checking...</div>
+</header>
+
+<nav>
+  <button class="tab active" data-page="overview">Overview</button>
+  <button class="tab" data-page="predict">Predict</button>
+  <button class="tab" data-page="insights">Data insights</button>
+  <button class="tab" data-page="retrain">Upload and retrain</button>
+</nav>
+
+<main>
+<!-- OVERVIEW -->
+<section id="overview" class="page active">
+  <div class="cards">
+    <div class="card"><div class="label">Uptime</div><div class="value" id="uptime">-</div><div class="small" id="started"></div></div>
+    <div class="card"><div class="label">Model version</div><div class="value" id="version">-</div><div class="small" id="saved-at"></div></div>
+    <div class="card"><div class="label">Predictions served</div><div class="value" id="served">-</div><div class="small" id="container"></div></div>
+    <div class="card"><div class="label">Average latency</div><div class="value" id="latency">-</div><div class="small">last 200 predictions</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Model performance on the test set</h2>
+      <p class="small">624 X-rays from patients the model never saw. Threshold <span id="thr"></span>.</p>
+      <div class="cards metrics" id="metric-cards"></div>
+      <h3>Confusion matrix</h3>
+      <table class="cm" id="cm"></table>
+    </div>
+    <div class="panel">
+      <h2>Response time (this container)</h2>
+      <canvas id="latency-chart" height="160"></canvas>
+      <h2 style="margin-top:24px">Training curves</h2>
+      <canvas id="history-chart" height="160"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- PREDICT -->
+<section id="predict" class="page">
+  <div class="grid2">
+    <div class="panel">
+      <h2>Upload one chest X-ray</h2>
+      <p class="small">JPEG or PNG. The image is turned to grayscale and resized to 224x224 before it goes into the model.</p>
+      <label class="drop" id="drop">
+        <input type="file" id="predict-file" accept="image/*">
+        <span id="drop-text">Click to choose an image, or drop it here</span>
+      </label>
+      <img id="preview" alt="">
+      <button id="predict-btn" class="primary" disabled>Predict</button>
+    </div>
+    <div class="panel">
+      <h2>Result</h2>
+      <div id="result" class="result empty">No prediction yet.</div>
+    </div>
+  </div>
+</section>
+
+<!-- INSIGHTS -->
+<section id="insights" class="page">
+  <p class="intro">These numbers come from all 5,856 original images (before resizing). I looked at them before training to understand what the model might pick up on, including things it should not.</p>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>1. Class balance</h2>
+      <canvas id="balance-chart" height="200"></canvas>
+      <p class="note">Almost three out of four training images are pneumonia. A model that always says pneumonia would already get 74% accuracy on train and 62.5% on test, so accuracy alone says little here. That is why I used class weights and also report recall, specificity and F1. The test set is more balanced than train, which made my first models look worse on test than on validation.</p>
+    </div>
+    <div class="panel">
+      <h2>2. Brightness in the centre of the image</h2>
+      <canvas id="brightness-chart" height="200"></canvas>
+      <p class="note">The centre of a pneumonia X-ray is brighter (median 152 vs 139 out of 255). On an X-ray, air looks black and fluid looks white, so infected lungs filled with fluid show up as white patches. Viral cases were the brightest (155), bacterial 151. The whole-image brightness is the same for both classes (about 122), so the difference really sits in the lung area and not in the exposure of the image.</p>
+    </div>
+    <div class="panel">
+      <h2>3. Contrast</h2>
+      <canvas id="contrast-chart" height="200"></canvas>
+      <p class="note">Pneumonia images have lower contrast (pixel standard deviation 55 vs 61). In a healthy chest the dark lungs stand out sharply against the white ribs and heart. When the lungs fill with fluid that edge gets washed out and the image looks hazy. I added random contrast changes during training so the model does not lean only on this.</p>
+    </div>
+    <div class="panel">
+      <h2>4. Original image size</h2>
+      <canvas id="size-chart" height="200"></canvas>
+      <p class="note">This one worried me. Normal images are much bigger (median 1654 x 1323 pixels) than pneumonia images (1160 x 776), and their shape is different too (width/height 1.24 vs 1.49). Size has nothing to do with the disease, it probably comes from different machines or cropping. A model could learn "small image means pneumonia". Resizing every image to 224 x 224 removes the size, but the stretching is still different per class, so this is a real limitation of the dataset.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>5. Average image per class</h2>
+    <div class="means">
+      <figure><img src="/insights/mean_normal.png" alt="average normal"><figcaption>Average NORMAL</figcaption></figure>
+      <figure><img src="/insights/mean_pneumonia.png" alt="average pneumonia"><figcaption>Average PNEUMONIA</figcaption></figure>
+      <figure><img src="/insights/mean_difference.png" alt="difference"><figcaption>PNEUMONIA minus NORMAL (red = brighter in pneumonia)</figcaption></figure>
+    </div>
+    <p class="note">The average normal chest has two clear dark lung shapes. In the pneumonia average they are blurry and lighter, so the fluid is spread over the lungs and not in one fixed place. The difference map is red over both lungs, strongest in the middle and lower parts. It is blue at the top and bottom, meaning the normal images show more of the neck and belly. That fits the different shape I found in the size chart.</p>
+    <p class="note">One more thing I only noticed here: there is a small letter R on the left side of the average normal image. Many normal X-rays have the side marker in exactly the same spot, while in the pneumonia images it moves around and blurs away. Like the image size, that has nothing to do with the lungs, and it is the kind of shortcut I would check first if I had more time (for example by covering the corners before training).</p>
+  </div>
+
+  <div class="panel">
+    <h2>Uploaded data waiting for retraining</h2>
+    <canvas id="uploads-chart" height="80"></canvas>
+  </div>
+</section>
+
+<!-- RETRAIN -->
+<section id="retrain" class="page">
+  <div class="grid2">
+    <div class="panel">
+      <h2>1. Upload labelled images</h2>
+      <p class="small">Choose many images that share one label, or a .zip with NORMAL/ and PNEUMONIA/ folders inside (then the label box is ignored).</p>
+      <div class="row">
+        <select id="upload-label">
+          <option value="NORMAL">NORMAL</option>
+          <option value="PNEUMONIA">PNEUMONIA</option>
+        </select>
+        <input type="file" id="upload-files" multiple accept="image/*,.zip">
+      </div>
+      <button id="upload-btn" class="primary">Upload</button>
+      <div id="upload-result" class="small"></div>
+      <h3>In the database</h3>
+      <table class="simple" id="upload-table"></table>
+      <p class="small" id="auto-note"></p>
+    </div>
+    <div class="panel">
+      <h2>2. Retrain</h2>
+      <p class="small">Retraining starts from the current model (not from zero), fine-tunes it on the new images plus 300 old images per class, and only goes live if it is not worse on the test set.</p>
+      <button id="retrain-btn" class="primary">Retrain now</button>
+      <div id="retrain-msg" class="small"></div>
+      <div id="run-live"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Retraining history</h2>
+    <table class="simple" id="runs-table"></table>
+  </div>
+</section>
+</main>
+
+<footer>Data: Kermany et al., Mendeley Data, CC BY 4.0. API docs at <a href="/docs">/docs</a>.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
