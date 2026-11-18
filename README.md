@@ -7,8 +7,8 @@ This builds on my machine learning summative, where I predicted sepsis in ICU pa
 ## Links
 
 * Video demo: VIDEO_LINK
-* Live app: APP_URL
-* API docs (Swagger): APP_URL/docs
+* Live app (AWS): http://13.63.225.111
+* API docs (Swagger): http://13.63.225.111/docs
 
 ## Dataset
 
@@ -35,7 +35,7 @@ MobileNetV2 pretrained on ImageNet, with a new head (dropout, dense layer with L
 
 Final model (E4) on the 624 test images, threshold 0.49 chosen on validation: accuracy 0.825, precision 0.782, recall 1.000, specificity 0.534, F1 0.877, ROC-AUC 0.969, loss 0.638.
 
-The model never missed a pneumonia case on the test set, but it called 109 of the 234 normal X-rays pneumonia, even though validation accuracy was about 97%. The notebook goes into why (normal images differ from pneumonia images in size, framing and side markers, and the test normals look a bit different from the training normals). Retraining on 120 new images from `data/new_batch` raised test specificity from 0.534 to 0.658 and accuracy from 0.825 to 0.865.
+The model never missed a pneumonia case on the test set, but it called 109 of the 234 normal X-rays pneumonia, even though validation accuracy was about 97%. The notebook goes into why (normal images differ from pneumonia images in size, framing and side markers, and the test normals look a bit different from the training normals). Retraining on the 120 new images in `data/new_batch` always helped a bit, but by how much changed between runs: on my laptop test accuracy went from 0.825 to 0.865 (specificity 0.534 to 0.658), and on the AWS server only to 0.829 (specificity 0.547). Fine-tuning a few epochs on a small batch is noisy, which is also why the job checks the new model on the test set before using it.
 
 The model file is `models/pneumonia_mobilenetv2.h5`, and `models/metadata.json` holds its version, threshold and metrics.
 
@@ -64,7 +64,22 @@ I ran `locust/locustfile.py` against the Docker setup with 1, 2 and 4 api contai
 
 One container handles about 20 predictions per second, then requests start to queue and the response time climbs. With 50 users, two containers were already enough (median down from 840 ms to 86 ms) and four did not add much, because 50 users cannot send more than about 32 requests per second. With 150 users the extra containers really mattered: throughput went from 15.5 to 56.5 requests per second and the median response time dropped from 6.7 s to 0.54 s. It did not scale perfectly 4 times because all four containers, nginx and my other Docker containers shared the same 4 CPU virtual machine.
 
+I also ran the 50 user test against the live AWS server (2 containers on a 2 CPU machine, sent from my laptop in Kigali to Stockholm): 907 predictions, 0 failures, 10.1 requests per second, median 2.9 s, 95th percentile 5.7 s (`locust/results/aws/`). It is slower than on my laptop because one prediction takes about 110 ms on the server CPU against about 35 ms on my Mac, so the queue builds up sooner, and every request also crosses the internet.
+
 My first runs had a lot of 502 errors. The containers were being killed because memory kept growing under load, since FastAPI ran the TensorFlow calls on many threads at once. Running every prediction on one dedicated thread per container fixed it, and memory stayed around 500 MB.
+
+## Deployment (AWS)
+
+The app runs on an AWS EC2 server in eu-north-1 (Stockholm), type m7i-flex.large (2 CPUs, 8 GB), with a fixed Elastic IP. When the server first starts, `deploy/aws_user_data.sh` installs Docker, clones this repo, builds the image and starts 2 api containers behind nginx on port 80. Uploaded images, the SQLite database and retrained models live in Docker volumes on the server disk, so they survive restarts.
+
+To update the server after pushing changes:
+
+```bash
+ssh -i pneumonia-xray-key.pem ec2-user@13.63.225.111
+cd /opt/app && sudo git pull
+sudo DOCKER_BUILDKIT=0 docker build -t pneumonia-xray-api .
+sudo HTTP_PORT=80 docker compose up -d --no-build --scale api=2
+```
 
 ## Project structure
 
@@ -96,6 +111,7 @@ pneumonia-xray-mlops/
 ├── models/
 │   ├── pneumonia_mobilenetv2.h5
 │   └── metadata.json
+├── deploy/aws_user_data.sh startup script for the EC2 server
 ├── locust/                 locustfile, benchmark script and results
 ├── figures/                plots from the notebook
 ├── results/experiments.csv
