@@ -1,0 +1,12 @@
+# packages the API and the retraining job need (this is what the Docker image installs)
+tensorflow-cpu==2.21.0; sys_platform == "linux" and platform_machine == "x86_64"
+tensorflow==2.21.0; sys_platform != "linux" or platform_machine != "x86_64"
+keras==3.15.1
+h5py==3.14.0
+numpy==2.5.5
+pandas==3.1.1
+scikit-learn==1.9.1
+pillow==13.0.0
+fastapi==0.163.2
+uvicorn[standard]==0.54.0
+python-multipart==0.0.34

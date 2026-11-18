@@ -1,0 +1,9 @@
+# extra packages for the notebook and the load test
+-r requirements.txt
+jupyter==1.1.1
+nbconvert==7.17.2
+matplotlib==3.11.2
+seaborn==0.13.2
+tensorboard
+locust==2.47.0
+tabulate==0.10.0
